@@ -26,7 +26,6 @@ app.use(
         inputSchema: {
           employeeNumber: z.string(),
           asofDate: z.string(),
-          projectName: z.string(),
         }
       },
       async (args) => {
@@ -41,6 +40,7 @@ app.use(
             },
             body: JSON.stringify({
               operationName: "getEmpLeaveBalance",
+              projectName: "MOBILEAPP",
               ...args
             })
           }
@@ -73,7 +73,6 @@ app.use(
           approvalStatusCd: z.string(),
           startDateDuration: z.string(),
           endDateDuration: z.string(),
-          projectName: z.string(),
         }
       },
       async (args) => {
@@ -88,6 +87,7 @@ app.use(
             },
             body: JSON.stringify({
               operationName: "createLeave",
+              projectName: "MOBILEAPP",
               ...args
             })
           }
