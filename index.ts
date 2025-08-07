@@ -1,11 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express ,{Request,Response} from "express";
-import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod";
 import cors from 'cors'
-
 
 const app = express();
 app.use(express.json());
@@ -16,115 +15,96 @@ app.use(
   }),
 );
 
-
-// Input schemas
-const listRecordsSchema = z.object({
-    expand: z.string().optional(),
-    fields: z.string().optional(),
-    q: z.string().optional(),
-    offset: z.number().optional(),
-    limit: z.number().optional(),
-    onlyData: z.boolean().optional(),
-    orderBy: z.string().optional(),
-    totalResults: z.boolean().optional()
-  });
-  const getAttachmentsSchema = z.object({
-    documentsOfRecordId: z.number(),
-    expand: z.string().optional(),
-    q: z.string().optional(),
-    limit: z.number().optional(),
-    offset: z.number().optional(),
-    onlyData: z.boolean().optional(),
-    orderBy: z.string().optional(),
-    totalResults: z.boolean().optional(),
-    links: z.string().optional(),
-    dependency: z.string().optional()
-  });
-  
-  // Utility to build query parameters
-  function toQuery(params: any): string {
-    const esc = encodeURIComponent;
-    return Object.entries(params || {})
-      .filter(([, v]) => v !== undefined)
-      .map(([k, v]) => esc(k) + '=' + esc(String(v)))
-      .join('&');
-  }
-
-const getServer = () => {
+  const getServer = () => {
     const server = new McpServer({ name: 'stateless-server', version: '1.0.0' });
-
-server.registerTool(
-  "getPayrollDocumentRecords",
-  {
-    title: "Get Payroll Document Records",
-    description: "List payroll document records with filters",
-    inputSchema: {
-        expand: z.string().optional(),
-        fields: z.string().optional(),
-        q: z.string().optional(),
-        offset: z.number().optional(),
-        limit: z.number().optional(),
-        onlyData: z.boolean().optional(),
-        orderBy: z.string().optional(),
-        totalResults: z.boolean().optional()
-      }
-  },
-  async (args:any) => {
-    const query = toQuery(args);
-    const res = await fetch(
-      `${process.env.ORACLE_BASE_URL}/hcmRestApi/resources/11.13.18.05/payrollDocumentRecords${query ? '?' + query : ''}`,
+  
+    server.registerTool(
+      "getLeaveBalance",
       {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${process.env.ORACLE_OAUTH_TOKEN}`,
-          "Accept": "application/json"
+        title: "Get Leave Balance",
+        description: "Fetch leave balances for a specific employee as of a given date.",
+        inputSchema: {
+          employeeNumber: z.string(),
+          asofDate: z.string(),
+          projectName: z.string(),
         }
+      },
+      async (args) => {
+        const response = await fetch(
+          `${process.env.ORACLE_BASE_URL}/ADQ_EMP_GET_ABSEN_BALAN_SYNC/1.0/leavebalance`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Basic ${process.env.ORACLE_TOKEN}`,
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              operationName: "getEmpLeaveBalance",
+              ...args
+            })
+          }
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        const data = await response.json()
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `${JSON.stringify(data)}`,
+            },
+          ],
+        };
       }
     );
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    return await res.json();
-  }
-);
-
-// Tool #2: get attachments for a payrollDocumentRecord
-server.registerTool(
-  "getPayrollDocumentAttachments",
-  {
-    title: "Get Payroll Document Record Attachments",
-    description: "List attachments for a given payroll document record",
-    inputSchema: {
-        documentsOfRecordId: z.number(),
-        expand: z.string().optional(),
-        q: z.string().optional(),
-        limit: z.number().optional(),
-        offset: z.number().optional(),
-        onlyData: z.boolean().optional(),
-        orderBy: z.string().optional(),
-        totalResults: z.boolean().optional(),
-        links: z.string().optional(),
-        dependency: z.string().optional()
-      }
-  },
-  async (args:any) => {
-    const { documentsOfRecordId, ...rest } = args;
-    const query = toQuery(rest);
-    const path = `/hcmRestApi/resources/11.13.18.05/payrollDocumentRecords/${documentsOfRecordId}/child/attachments`;
-    const res = await fetch(
-      `${process.env.ORACLE_BASE_URL}${path}${query ? '?' + query : ''}`,
+  
+    server.registerTool(
+      "createLeaveBalance",
       {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${process.env.ORACLE_OAUTH_TOKEN}`,
-          "Accept": "application/json"
+        title: "Create Leave Entry",
+        description: "Submit a leave request for an employee.",
+        inputSchema: {
+          personNumber: z.string(),
+          employer: z.string(),
+          absenceType: z.string(),
+          startDate: z.string(),
+          endDate: z.string(),
+          absenceStatusCd: z.string(),
+          approvalStatusCd: z.string(),
+          startDateDuration: z.string(),
+          endDateDuration: z.string(),
+          projectName: z.string(),
         }
+      },
+      async (args) => {
+        const response = await fetch(
+          `${process.env.ORACLE_BASE_URL}/ADQ_CREATE_ABSENCE_SYNC/1.0/createAbsence`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Basic ${process.env.ORACLE_TOKEN}`,
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              operationName: "createLeave",
+              ...args
+            })
+          }
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        const data = await response.json()
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `${JSON.stringify(data)}`,
+            },
+          ],
+        };
       }
     );
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    return await res.json();
-  }
-);
-
-
+  
     return server;
   };
 
