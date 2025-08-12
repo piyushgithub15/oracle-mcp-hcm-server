@@ -1,0 +1,469 @@
+openapi: 3.0.3
+info:
+  title: Leave Management System API
+  description: API for managing employee leave requests and approvals
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@company.com
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+paths:
+  /apply-leave:
+    post:
+      summary: Apply for leave
+      description: Submit a new leave request
+      tags:
+        - Leave Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+            example:
+              employeeId: "EMP001"
+              leaveType: "annual"
+              startDate: "2024-02-01"
+              endDate: "2024-02-03"
+              reason: "Family vacation"
+              totalDays: 3
+      responses:
+        '201':
+          description: Leave request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pending-approvals/{managerId}:
+    get:
+      summary: Get pending leave approvals
+      description: Retrieve all pending leave requests that need approval from a specific manager
+      tags:
+        - Approval Management
+      parameters:
+        - name: managerId
+          in: path
+          required: true
+          description: ID of the manager
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]+$'
+            example: "MGR001"
+        - name: status
+          in: query
+          required: false
+          description: Filter by approval status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+            default: pending
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of records to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of records to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of pending approvals retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingApprovalsResponse'
+        '400':
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Manager not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /approve-reject/{approvalId}:
+    put:
+      summary: Approve or reject leave request
+      description: Update the status of a leave request (approve or reject)
+      tags:
+        - Approval Management
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          description: ID of the approval to process
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]+$'
+            example: "APR001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+            example:
+              status: "approved"
+              comments: "Leave approved as requested"
+              approvedBy: "MGR001"
+              approvedAt: "2024-01-15T10:30:00Z"
+      responses:
+        '200':
+          description: Leave request status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Approval not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - approval already processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    LeaveRequest:
+      type: object
+      required:
+        - employeeId
+        - leaveType
+        - startDate
+        - endDate
+        - reason
+        - totalDays
+      properties:
+        employeeId:
+          type: string
+          description: Unique identifier for the employee
+          pattern: '^[A-Z0-9]+$'
+          example: "EMP001"
+        leaveType:
+          type: string
+          description: Type of leave being requested
+          enum: [annual, sick, personal, maternity, paternity, bereavement, other]
+          example: "annual"
+        startDate:
+          type: string
+          format: date
+          description: Start date of the leave period
+          example: "2024-02-01"
+        endDate:
+          type: string
+          format: date
+          description: End date of the leave period
+          example: "2024-02-03"
+        reason:
+          type: string
+          description: Reason for the leave request
+          maxLength: 500
+          example: "Family vacation"
+        totalDays:
+          type: number
+          description: Total number of leave days
+          minimum: 0.5
+          maximum: 365
+          example: 3
+        attachments:
+          type: array
+          description: Optional attachments (e.g., medical certificates)
+          items:
+            type: string
+            format: uri
+          example: ["https://example.com/medical-cert.pdf"]
+
+    LeaveResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the leave request
+          example: "LEAVE001"
+        employeeId:
+          type: string
+          description: Employee ID who requested the leave
+          example: "EMP001"
+        status:
+          type: string
+          description: Current status of the leave request
+          enum: [pending, approved, rejected, cancelled]
+          example: "pending"
+        leaveType:
+          type: string
+          description: Type of leave requested
+          example: "annual"
+        startDate:
+          type: string
+          format: date
+          example: "2024-02-01"
+        endDate:
+          type: string
+          format: date
+          example: "2024-02-03"
+        totalDays:
+          type: number
+          example: 3
+        reason:
+          type: string
+          example: "Family vacation"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T09:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T09:00:00Z"
+
+    PendingApprovalsResponse:
+      type: object
+      properties:
+        managerId:
+          type: string
+          description: ID of the manager
+          example: "MGR001"
+        totalCount:
+          type: integer
+          description: Total number of pending approvals
+          example: 15
+        pendingApprovals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingApproval'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    PendingApproval:
+      type: object
+      properties:
+        approvalId:
+          type: string
+          description: Unique identifier for the approval
+          example: "APR001"
+        leaveRequest:
+          $ref: '#/components/schemas/LeaveResponse'
+        employee:
+          $ref: '#/components/schemas/EmployeeInfo'
+        submittedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T09:00:00Z"
+        urgency:
+          type: string
+          description: Urgency level of the request
+          enum: [low, medium, high, urgent]
+          example: "medium"
+
+    EmployeeInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "EMP001"
+        name:
+          type: string
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          example: "john.doe@company.com"
+        department:
+          type: string
+          example: "Engineering"
+        position:
+          type: string
+          example: "Software Engineer"
+
+    ApprovalDecision:
+      type: object
+      required:
+        - status
+        - approvedBy
+      properties:
+        status:
+          type: string
+          description: Decision on the leave request
+          enum: [approved, rejected]
+          example: "approved"
+        comments:
+          type: string
+          description: Comments from the approver
+          maxLength: 1000
+          example: "Leave approved as requested"
+        approvedBy:
+          type: string
+          description: ID of the manager making the decision
+          pattern: '^[A-Z0-9]+$'
+          example: "MGR001"
+        approvedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the decision was made
+          example: "2024-01-15T10:30:00Z"
+
+    ApprovalResponse:
+      type: object
+      properties:
+        approvalId:
+          type: string
+          description: ID of the processed approval
+          example: "APR001"
+        status:
+          type: string
+          description: New status of the leave request
+          enum: [approved, rejected]
+          example: "approved"
+        leaveRequest:
+          $ref: '#/components/schemas/LeaveResponse'
+        approvedBy:
+          type: string
+          description: ID of the manager who made the decision
+          example: "MGR001"
+        approvedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        comments:
+          type: string
+          example: "Leave approved as requested"
+
+    PaginationInfo:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Number of records per page
+          example: 20
+        offset:
+          type: integer
+          description: Number of records skipped
+          example: 0
+        totalCount:
+          type: integer
+          description: Total number of records
+          example: 150
+        hasNext:
+          type: boolean
+          description: Whether there are more records
+          example: true
+        hasPrevious:
+          type: boolean
+          description: Whether there are previous records
+          example: false
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Validation failed"
+        code:
+          type: string
+          description: Error code
+          example: "VALIDATION_ERROR"
+        details:
+          type: array
+          description: Detailed error information
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: Field that caused the error
+              message:
+                type: string
+                description: Error message for the field
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred
+          example: "2024-01-15T10:30:00Z"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Leave Management
+    description: Operations related to leave requests
+  - name: Approval Management
+    description: Operations related to leave approvals
